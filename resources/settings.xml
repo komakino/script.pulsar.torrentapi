@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="General">
+        <setting 
+            label="Shows using date based episode numbering(comma separated list of tvdb id's)" 
+            type="text" 
+            id="showexceptions" 
+            default="194751,270261,292421,71998" />
+    </category>
+</settings>

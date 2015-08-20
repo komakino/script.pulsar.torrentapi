@@ -6,18 +6,16 @@
 # https://github.com/steeve/plugin.video.pulsar/blob/master/resources/site-packages/pulsar/provider.py
 import re, xbmc, xbmcaddon
 from pulsar import provider
+from datetime import datetime,tzinfo,timedelta
+import dateutil.parser
 
 app_id = 'script.pulsar.torrentapi'
 endpoint = 'http://www.torrentapi.org/pubapi.php'
+trakt_apikey = '14b5146e25005b96c03cb8b125d7b5cb452e15e0cfe073685dc92992bbb707f9'
 
-thetvdb_api_key = '6751159EC176672B'
-
-dateBasedEpisodeNumbering = [
-    194751, # Conan (2010)
-    270261, # The Tonight Show Starring Jimmy Fallon
-    292421, # The Late Late Show with James Corden
-    71998,  # Jimmy Kimmel Live
-]
+def hasDateBasedEpisodeNumbering(id):
+    exceptions = provider.get_setting('showexceptions')
+    return int(id) in [int(x.strip()) for x in exceptions.split(',')]
 
 def request(query):
     response = provider.GET(endpoint, params={
@@ -40,6 +38,7 @@ def formatPayload(results,epString=''):
         provider.log.info('Torrentapi answered: %s' % results.data)
         json = {}
     
+    provider.log.info('Torrentapi answered: %s' % json)
     for torrent in json:
         item = {
             'uri': torrent['d'],
@@ -57,31 +56,29 @@ def formatPayload(results,epString=''):
 def cleanTitle(title):
     return re.sub(r'\([^)]*\)', '', title).strip()
 
-def getEpisodeAirDate(episode):
-
-    if episode['tvdb_id'] == 194751:
-        episode['season'] = int(episode['season']) - 2010
-
-    # summary = globals.traktapi.getEpisodeSummary(episode['imdb_id'], episode['season'], episode['episode'])
-
-    provider.log.info('Pre date query %s' % globals.traktapi)
-    response = provider.GET('http://services.tvrage.com/feeds/episodeinfo.php', params={
-            'exact': 1,
-            'show': cleanTitle(episode['title']),
-            'ep': '%(season)sx%(episode)s' % episode
-            })
+def getEpisodeAirDate(episode,epStringStandard):
     try:
-        xml = response.xml()
-        return xml.find('./episode/airdate').text.replace('-','.')
+        response = provider.GET('https://api-v2launch.trakt.tv/shows/%(imdb_id)s/seasons/%(season)s/episodes/%(episode)s?extended=full' % episode, headers={
+            'trakt-api-version': 2,
+            'trakt-api-key': trakt_apikey,
+            'Content-Type': 'application/json',
+            })
+        
+        date = response.json()['first_aired']
+        date = dateutil.parser.parse(date) - timedelta(hours=8)
+        datestring = date.strftime('%Y.%m.%d')
+
+        provider.log.info('Found match: %s' % datestring)
+        return datestring
     except Exception, e:
-        provider.log.warning('Failed to parse XML %s' % episode['season'])
-        return None
+        return epStringStandard
+
 
 def search_episode(episode):
     epStringStandard = 'S%(season)02dE%(episode)02d' % episode
 
-    if episode['tvdb_id'] in dateBasedEpisodeNumbering:
-        epString = getEpisodeAirDate(episode)
+    if hasDateBasedEpisodeNumbering(episode['tvdb_id']):
+        epString = getEpisodeAirDate(episode,epStringStandard)
     else:
         epString = epStringStandard
 
