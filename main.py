@@ -4,54 +4,104 @@
 # Make sure you declare Pulsar as dependency in the addon.xml or it won't work
 # You can read it at:
 # https://github.com/steeve/plugin.video.pulsar/blob/master/resources/site-packages/pulsar/provider.py
+import re, xbmc, xbmcaddon
 from pulsar import provider
 
+app_id = 'script.pulsar.torrentapi'
+endpoint = 'http://www.torrentapi.org/pubapi.php'
 
-# Raw search
-# query is always a string
-def search(query):
-    resp = provider.GET("http://foo.bar/search?q=%s" % provider.quote_plus(query), params={
-        "q": query,
-    })
-    return provider.extract_magnets(resp.data)
-# To parse JSON you can do:
-#     items = resp.json()
-# To parse XML you can do:
-#     dom = resp.xml()
-# If you have RSS, you can let Pulsar parse it for you with:
-#     return provider.parse_rss(resp.xml())
+thetvdb_api_key = '6751159EC176672B'
 
+dateBasedEpisodeNumbering = [
+    194751, # Conan (2010)
+    270261, # The Tonight Show Starring Jimmy Fallon
+    292421, # The Late Late Show with James Corden
+    71998,  # Jimmy Kimmel Live
+]
 
-# Episode Payload Sample
-# {
-#     "imdb_id": "tt0092400",
-#     "tvdb_id": "76385",
-#     "title": "married with children",
-#     "season": 1,
-#     "episode": 1,
-#     "titles": null
-# }
+def request(query):
+    response = provider.GET(endpoint, params={
+        'get_token': 'get_token',
+        'app_id': app_id
+        })
+    query.update({
+        'token': response.data,
+        'format': 'json_extended',
+        'ranked': 0,
+        'app_id': app_id
+        })
+    provider.log.info('Query: %s' % query)
+    return provider.GET(endpoint, query)
+
+def formatPayload(results,epString=''):
+    try:
+        json = results.json()
+    except Exception, e:
+        provider.log.info('Torrentapi answered: %s' % results.data)
+        json = {}
+    
+    for torrent in json:
+        item = {
+            'uri': torrent['d'],
+            'name': torrent['f'] + ' %s' % epString,
+            'seeds': int(torrent['s']),
+            'peers': int(torrent['l']),
+            'size': int(torrent['t']),
+            'resolution': 2,
+            'rip_type': 7,
+            'audio_codec': 2,
+        }
+        provider.log.info('Found match: %s' % item)
+        yield item
+
+def cleanTitle(title):
+    return re.sub(r'\([^)]*\)', '', title).strip()
+
+def getEpisodeAirDate(episode):
+
+    if episode['tvdb_id'] == 194751:
+        episode['season'] = int(episode['season']) - 2010
+
+    # summary = globals.traktapi.getEpisodeSummary(episode['imdb_id'], episode['season'], episode['episode'])
+
+    provider.log.info('Pre date query %s' % globals.traktapi)
+    response = provider.GET('http://services.tvrage.com/feeds/episodeinfo.php', params={
+            'exact': 1,
+            'show': cleanTitle(episode['title']),
+            'ep': '%(season)sx%(episode)s' % episode
+            })
+    try:
+        xml = response.xml()
+        return xml.find('./episode/airdate').text.replace('-','.')
+    except Exception, e:
+        provider.log.warning('Failed to parse XML %s' % episode['season'])
+        return None
+
 def search_episode(episode):
-    return search("%(title)s S%(season)02dE%(episode)02d" % episode)
+    epStringStandard = 'S%(season)02dE%(episode)02d' % episode
 
+    if episode['tvdb_id'] in dateBasedEpisodeNumbering:
+        epString = getEpisodeAirDate(episode)
+    else:
+        epString = epStringStandard
 
-# Movie Payload Sample
-# Note that "titles" keys are countries, not languages
-# The titles are also normalized (accents removed, lower case etc...)
-# {
-#     "imdb_id": "tt1254207",
-#     "title": "big buck bunny",
-#     "year": 2008,
-#     "titles": {
-#         "es": "el gran conejo",
-#         "nl": "peach open movie project",
-#         "ru": "большои кролик",
-#         "us": "big buck bunny short 2008"
-#     }
-# }
+    response = request({
+        'mode': 'search',
+        'search_tvdb': episode['tvdb_id'],
+        'search_string': epString
+        })
+
+    return formatPayload(response,epString=epStringStandard)
+    # return search("%(title)s S%(season)02dE%(episode)02d" % episode)
+
 def search_movie(movie):
-    return search("%(title)s %(year)d" % movie)
+    provider.log.info('IMDB: %s' % movie['imdb_id'])
+    response = request({
+        'mode': 'search',
+        'search_imdb': movie['imdb_id']
+        })
 
+    return formatPayload(response)
 
 # This registers your module for use
-provider.register(search, search_movie, search_episode)
+provider.register(None, search_movie, search_episode)
