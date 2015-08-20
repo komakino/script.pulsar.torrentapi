@@ -28,7 +28,7 @@ def request(query):
         'ranked': 0,
         'app_id': app_id
         })
-    provider.log.info('Query: %s' % query)
+
     return provider.GET(endpoint, query)
 
 def formatPayload(results,epString=''):
@@ -38,7 +38,6 @@ def formatPayload(results,epString=''):
         provider.log.info('Torrentapi answered: %s' % results.data)
         json = {}
     
-    provider.log.info('Torrentapi answered: %s' % json)
     for torrent in json:
         item = {
             'uri': torrent['d'],
@@ -50,7 +49,7 @@ def formatPayload(results,epString=''):
             'rip_type': 7,
             'audio_codec': 2,
         }
-        provider.log.info('Found match: %s' % item)
+        provider.log.info('Found match: %s' % torrent['f'])
         yield item
 
 def cleanTitle(title):
@@ -68,7 +67,6 @@ def getEpisodeAirDate(episode,epStringStandard):
         date = dateutil.parser.parse(date) - timedelta(hours=8)
         datestring = date.strftime('%Y.%m.%d')
 
-        provider.log.info('Found match: %s' % datestring)
         return datestring
     except Exception, e:
         return epStringStandard
@@ -92,7 +90,6 @@ def search_episode(episode):
     # return search("%(title)s S%(season)02dE%(episode)02d" % episode)
 
 def search_movie(movie):
-    provider.log.info('IMDB: %s' % movie['imdb_id'])
     response = request({
         'mode': 'search',
         'search_imdb': movie['imdb_id']
