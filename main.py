@@ -64,7 +64,10 @@ def getEpisodeAirDate(episode,epStringStandard):
             })
         
         date = response.json()['first_aired']
-        date = dateutil.parser.parse(date) - timedelta(hours=8)
+        date = dateutil.parser.parse(date)
+        provider.log.info(date)
+        date = date - timedelta(hours=4)
+        provider.log.info(date)
         datestring = date.strftime('%Y.%m.%d')
 
         return datestring
