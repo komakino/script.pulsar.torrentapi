@@ -1,9 +1,4 @@
 # coding: utf-8
-
-# First, you need to import the pulsar module
-# Make sure you declare Pulsar as dependency in the addon.xml or it won't work
-# You can read it at:
-# https://github.com/steeve/plugin.video.pulsar/blob/master/resources/site-packages/pulsar/provider.py
 import re, xbmc, xbmcaddon
 from pulsar import provider
 from datetime import datetime,tzinfo,timedelta
@@ -35,7 +30,7 @@ def formatPayload(results,epString=''):
     try:
         json = results.json()
     except Exception, e:
-        provider.log.info('Torrentapi answered: %s' % results.data)
+        provider.log.info('Torrentapi answered %s: %s' % (results.getcode(),results.data))
         json = {}
     
     for torrent in json:
